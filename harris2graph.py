@@ -20,7 +20,7 @@
  ***************************************************************************/
 """
 
-import sys, os, argparse
+import sys, os, argparse, csv
 
 #Global data
 dataset = ''
@@ -55,8 +55,13 @@ def setNode(node, unit, indegree, outdegree):
 def setEdges(sourceId, sourceLabel, targets):
     global edgeId
     for targetLabel in targets:
-        edges.append({'id': edgeId, 'source': sourceId, 'sourceLabel': sourceLabel, 'target': -1, 'targetLabel': targetLabel, 'weight': 1})
+        setEdge(sourceId, sourceLabel, -1, targetLabel)
         edgeId += 1
+
+def setEdge(sourceId, sourceLabel, targetId, targetLabel):
+    global edgeId
+    edges.append({'id': edgeId, 'source': sourceId, 'sourceLabel': sourceLabel, 'target': targetId, 'targetLabel': targetLabel, 'weight': 1})
+    edgeId += 1
 
 def weightEdges():
     for edge in edges:
@@ -78,6 +83,29 @@ def inEdges(id):
         if edge['target'] == id:
             inedges.append(edge)
     return inedges
+
+def readCsv(csvFile):
+    reader = csv.reader(csvFile)
+    inNodes = set()
+    inEdges = set()
+    for record in reader:
+        try:
+            above = str(record[0])
+            below = str(record[1])
+            inNodes.add(above)
+            inNodes.add(below)
+            inEdges.add((above, below))
+        except:
+            if record:
+                print 'Error reading row: ' + record
+    index = {}
+    for node in sorted(inNodes):
+        index[node] = nodeId
+        setNode(node, 'context', 0, 0)
+    for edge in inEdges:
+        above = edge[0]
+        below = edge[1]
+        setEdge(index[above], above, index[below], below)
 
 def readLst(file):
     line = file.readline().strip()
@@ -254,6 +282,7 @@ def writeCsv(simple):
 
 
 parser = argparse.ArgumentParser(description='A tool to convert legacy .LST Harris Matrix files into modern graph formats.')
+parser.add_argument("-i", "--input", help="Choose input file format, optional, defaults to infile suffix", choices=['lst', 'csv'])
 parser.add_argument("-g", "--graph", help="Choose output graph format, optional, defaults to outfile suffix", choices=['gv', 'dot', 'gml', 'graphml', 'gxl', 'tgf', 'csv'])
 parser.add_argument("-n", "--name", help="Name for graph")
 parser.add_argument("-wn", "--width", help="Width of node", type=float)
@@ -263,6 +292,13 @@ parser.add_argument('infile', help="Source .lst file", nargs='?', type=argparse.
 parser.add_argument('outfile', help="Destination graph file", nargs='?', type=argparse.FileType('w'), default=sys.stdout)
 
 args = parser.parse_args()
+
+if args.input:
+    informat = args.input
+elif args.infile.name != '<stdin>':
+    basename, informat = os.path.splitext(args.infile.name)
+    informat = informat.strip('.')
+informat = informat.lower()
 
 if args.graph:
     graph = args.graph
@@ -276,7 +312,10 @@ if (args.width is not None and args.width > 0):
 if (args.height is not None and args.height > 0):
     nodeHeight = args.height
 
-readLst(args.infile)
+if informat == 'csv':
+    readCsv(args.infile)
+else:
+    readLst(args.infile)
 
 if (args.name is not None and args.name):
     dataset = args.name
